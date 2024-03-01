@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Lists{% endblock %}
+
+{% block content %}
+<div class="flex flex-col">
+  <h1>Lists</h1>
+  <h2>Me</h2>
+  <ul>
+  {% for list in my_lists %}
+  <li>{{list.name}}</li>
+  {% endfor %}
+  </ul>
+  {% for (friend, lists) in friends_lists %}
+  <h2>{{friend.first_name}} {{friend.last_name}}</h2>
+  <ul>
+    {% for list in lists %}
+    <li>{{list.name}}</li>
+    {% endfor %}
+  </ul>
+  {% endfor %}
+</div>
+{% endblock %}
