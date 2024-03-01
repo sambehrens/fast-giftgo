@@ -8,13 +8,15 @@ use serde::{Deserialize, Serialize};
 use tokio_stream::StreamExt;
 use warp::{reject::Rejection, reply::Reply, Filter};
 
+mod secrets;
+
 // Bluu Next font is kinda nice
 // cargo watch -x run
 
 #[tokio::main]
 async fn main() -> mongodb::error::Result<()> {
     let client_options =
-    ClientOptions::parse("url here").await?;
+    ClientOptions::parse(secrets::mongo_url).await?;
     let client = Client::with_options(client_options)?;
     let database = client.database("test");
     let users = database.collection::<User>("users");
