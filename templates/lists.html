@@ -3,29 +3,34 @@
 {% block title %}Lists{% endblock %}
 
 {% block content %}
-<div class="flex flex-col">
-  <h1>Lists</h1>
-  <h2>Me</h2>
-  <ul>
-  {% for list in my_lists %}
-    {% match list.id %}
-      {% when Some with (list_id) %}
-      <li><a href="/lists/{{list_id}}">{{list.name}}</a></li>
-      {% when None %}
-    {% endmatch %}
-  {% endfor %}
-  </ul>
-  {% for (friend, lists) in friends_lists %}
-  <h2>{{friend.first_name}} {{friend.last_name}}</h2>
-  <ul>
-    {% for list in lists %}
+<div>
+  <div class="flex flex-col">
+    <h1>Lists</h1>
+    <h2>Me</h2>
+    <ul>
+    {% for list in my_lists %}
       {% match list.id %}
         {% when Some with (list_id) %}
-        <li><a href="/lists/{{list_id}}">{{list.name}}</a></li>
+        <li><button hx-get="/lists/{{list_id}}" hx-trigger="click" hx-target="#list" hx-swap="innterHTML" hx-push-url="true">{{list.name}}</button></li>
         {% when None %}
       {% endmatch %}
     {% endfor %}
-  </ul>
-  {% endfor %}
+    </ul>
+    {% for (friend, lists) in friends_lists %}
+    <h2>{{friend.first_name}} {{friend.last_name}}</h2>
+    <ul>
+      {% for list in lists %}
+        {% match list.id %}
+          {% when Some with (list_id) %}
+            <li><button hx-get="/lists/{{list_id}}" hx-trigger="click" hx-target="#list" hx-swap="innterHTML" hx-push-url="true">{{list.name}}</button></li>
+          {% when None %}
+        {% endmatch %}
+      {% endfor %}
+    </ul>
+    {% endfor %}
+  </div>
+  <div id="list">
+    {% block list %}{% endblock %}
+  </div>
 </div>
 {% endblock %}

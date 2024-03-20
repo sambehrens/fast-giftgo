@@ -26,19 +26,21 @@ async fn main() -> mongodb::error::Result<()> {
     database.run_command(doc! {"ping": 1}, None).await?;
     println!("Pinged your deployment. You successfully connected to MongoDB!");
 
-    let list_route = warp::path!("lists")
+    let lists_page_route = warp::path!("lists")
         .and(with_lists(lists.clone()))
-        .and(with_friendships(friendships))
+        .and(with_friendships(friendships.clone()))
         .and(with_users(users.clone()))
         .and_then(lists_handler);
 
-    let lists_route = warp::path!("lists" / String)
+    let list_route = warp::path!("lists" / String)
         .and(with_lists(lists.clone()))
         .and(with_users(users.clone()))
+        .and(with_friendships(friendships.clone()))
         .and(with_list_items(list_items.clone()))
+        .and(warp::header::optional::<String>("HX-Request"))
         .and_then(single_list_handler);
 
-    warp::serve(lists_route.or(list_route))
+    warp::serve(list_route.or(lists_page_route))
         .run(([0, 0, 0, 0, 0, 0, 0, 0], 3030))
         .await;
 
@@ -75,7 +77,7 @@ async fn lists_handler(
     lists: Collection<List>,
     friendships: Collection<Friendship>,
     users: Collection<User>,
-) -> WarpResult<impl Reply> {
+) -> WarpResult<ListsPage> {
     let my_lists = lists
         .find(
             doc! {"userId": ObjectId::parse_str("5e2deeb7b337533136035340").unwrap()},
@@ -141,7 +143,7 @@ async fn lists_handler(
         })
         .collect::<Vec<_>>();
 
-    Ok(ListsView {
+    Ok(ListsPage {
         my_lists,
         friends_lists,
     })
@@ -151,7 +153,9 @@ async fn single_list_handler(
     list_id: String,
     lists: Collection<List>,
     users: Collection<User>,
+    friendships: Collection<Friendship>,
     list_items: Collection<ListItem>,
+    hx_request: Option<String>,
 ) -> WarpResult<impl Reply> {
     let list = lists
         .find_one(doc! {"_id": ObjectId::parse_str(list_id).unwrap()}, None)
@@ -176,22 +180,84 @@ async fn single_list_handler(
         .await
         .unwrap();
 
-    Ok(SingleListView { list, user, list_items })
+    match hx_request.as_deref() {
+        Some("true") => Ok(ViewType::Partial(SingleListPartial {
+            list,
+            user,
+            list_items,
+        })),
+        _ => {
+            let ListsPage {
+                my_lists,
+                friends_lists,
+            } = lists_handler(lists, friendships, users).await?;
+            // ^^ there is parallelization to be had here
+            Ok(ViewType::Page(ListsPageViewSingleList {
+                list,
+                user,
+                list_items,
+                my_lists,
+                friends_lists,
+            }))
+        }
+    }
+}
+
+enum ViewType {
+    Partial(SingleListPartial),
+    Page(ListsPageViewSingleList),
+}
+
+impl Reply for ViewType {
+    fn into_response(self) -> warp::reply::Response {
+        match self {
+            Self::Partial(t) => {
+                let body = t
+                    .render()
+                    .unwrap_or_else(|e| format!("Failed to render template: {}", e));
+                warp::reply::html(body).into_response()
+            }
+            Self::Page(t) => {
+                let body = t
+                    .render()
+                    .unwrap_or_else(|e| format!("Failed to render template: {}", e));
+                warp::reply::html(body).into_response()
+            }
+        }
+    }
 }
 
 #[derive(Template)]
-#[template(path = "list.html")]
-struct SingleListView {
+#[template(path = "list_partial.html")]
+struct SingleListPartial {
     list: List,
     list_items: Vec<ListItem>,
     user: User,
 }
 
+// #[derive(Template)]
+// #[template(path = "list.html")]
+// struct SingleListPage {
+//     list: List,
+//     list_items: Vec<ListItem>,
+//     user: User,
+// }
+
 #[derive(Template)]
 #[template(path = "lists.html")]
-struct ListsView {
+struct ListsPage {
     my_lists: Vec<List>,
     friends_lists: Vec<(User, Vec<List>)>,
+}
+
+#[derive(Template)]
+#[template(path = "list.html")]
+struct ListsPageViewSingleList {
+    my_lists: Vec<List>,
+    friends_lists: Vec<(User, Vec<List>)>,
+    list: List,
+    list_items: Vec<ListItem>,
+    user: User,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
