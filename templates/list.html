@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}{{user.first_name}}: {{list.name}}{% endblock %}
+
+{% block content %}
+<div class="flex flex-col">
+  <code><a href="/lists"><- Lists</a></code>
+  <h1>{{list.name}}</h1>
+  <ul>
+  {% for item in list_items %}
+    {% match item.link %}
+      {% when Some with (link) %}
+      <li><a href="{{link}}" rel="noopener noreferrer" target="_blank">{{item.name}}</a></li>
+      {% when None %}
+      <li>{{item.name}}</li>
+    {% endmatch %}
+  {% endfor %}
+  </ul>
+</div>
+{% endblock %}

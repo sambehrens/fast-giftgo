@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::{collections::HashMap, convert::Infallible};
 
 use askama::Template;
 use bson::oid::ObjectId;
@@ -15,8 +15,7 @@ mod secrets;
 
 #[tokio::main]
 async fn main() -> mongodb::error::Result<()> {
-    let client_options =
-    ClientOptions::parse(secrets::mongo_url).await?;
+    let client_options = ClientOptions::parse(secrets::mongo_url).await?;
     let client = Client::with_options(client_options)?;
     let database = client.database("test");
     let users = database.collection::<User>("users");
@@ -27,17 +26,47 @@ async fn main() -> mongodb::error::Result<()> {
     database.run_command(doc! {"ping": 1}, None).await?;
     println!("Pinged your deployment. You successfully connected to MongoDB!");
 
-    let lists = warp::path!("lists")
-        .and(warp::any().map(move || lists.clone()))
-        .and(warp::any().map(move || friendships.clone()))
-        .and(warp::any().map(move || users.clone()))
+    let list_route = warp::path!("lists")
+        .and(with_lists(lists.clone()))
+        .and(with_friendships(friendships))
+        .and(with_users(users.clone()))
         .and_then(lists_handler);
 
-    warp::serve(lists)
+    let lists_route = warp::path!("lists" / String)
+        .and(with_lists(lists.clone()))
+        .and(with_users(users.clone()))
+        .and(with_list_items(list_items.clone()))
+        .and_then(single_list_handler);
+
+    warp::serve(lists_route.or(list_route))
         .run(([0, 0, 0, 0, 0, 0, 0, 0], 3030))
         .await;
 
     Ok(())
+}
+
+fn with_lists(
+    lists: Collection<List>,
+) -> impl Filter<Extract = (Collection<List>,), Error = Infallible> + Clone {
+    warp::any().map(move || lists.clone())
+}
+
+fn with_friendships(
+    friendships: Collection<Friendship>,
+) -> impl Filter<Extract = (Collection<Friendship>,), Error = Infallible> + Clone {
+    warp::any().map(move || friendships.clone())
+}
+
+fn with_users(
+    users: Collection<User>,
+) -> impl Filter<Extract = (Collection<User>,), Error = Infallible> + Clone {
+    warp::any().map(move || users.clone())
+}
+
+fn with_list_items(
+    list_items: Collection<ListItem>,
+) -> impl Filter<Extract = (Collection<ListItem>,), Error = Infallible> + Clone {
+    warp::any().map(move || list_items.clone())
 }
 
 type WarpResult<T> = std::result::Result<T, Rejection>;
@@ -112,15 +141,55 @@ async fn lists_handler(
         })
         .collect::<Vec<_>>();
 
-    Ok(Lists {
+    Ok(ListsView {
         my_lists,
         friends_lists,
     })
 }
 
+async fn single_list_handler(
+    list_id: String,
+    lists: Collection<List>,
+    users: Collection<User>,
+    list_items: Collection<ListItem>,
+) -> WarpResult<impl Reply> {
+    let list = lists
+        .find_one(doc! {"_id": ObjectId::parse_str(list_id).unwrap()}, None)
+        .await
+        .unwrap()
+        .ok_or(warp::reject())?;
+
+    let user = match list.user_id {
+        Some(id) => Ok(users
+            .find_one(doc! {"_id": id}, None)
+            .await
+            .unwrap()
+            .ok_or(warp::reject())?),
+        None => Err(warp::reject()),
+    }?;
+
+    let list_items = list_items
+        .find(doc! {"listId": list.id.unwrap()}, None)
+        .await
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .await
+        .unwrap();
+
+    Ok(SingleListView { list, user, list_items })
+}
+
+#[derive(Template)]
+#[template(path = "list.html")]
+struct SingleListView {
+    list: List,
+    list_items: Vec<ListItem>,
+    user: User,
+}
+
 #[derive(Template)]
 #[template(path = "lists.html")]
-struct Lists {
+struct ListsView {
     my_lists: Vec<List>,
     friends_lists: Vec<(User, Vec<List>)>,
 }
@@ -197,13 +266,21 @@ struct ListItem {
     link: Option<String>,
     claimer_id: Option<ObjectId>,
     claimer_string: Option<String>,
-    #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
-    removed_at: chrono::DateTime<Utc>,
+    // #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    removed_at: Option<OptionalDateTime>,
 
     #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     created_at: chrono::DateTime<Utc>,
     #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     updated_at: chrono::DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(transparent)]
+struct OptionalDateTime {
+    #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    value: chrono::DateTime<Utc>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

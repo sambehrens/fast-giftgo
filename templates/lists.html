@@ -8,14 +8,22 @@
   <h2>Me</h2>
   <ul>
   {% for list in my_lists %}
-  <li>{{list.name}}</li>
+    {% match list.id %}
+      {% when Some with (list_id) %}
+      <li><a href="/lists/{{list_id}}">{{list.name}}</a></li>
+      {% when None %}
+    {% endmatch %}
   {% endfor %}
   </ul>
   {% for (friend, lists) in friends_lists %}
   <h2>{{friend.first_name}} {{friend.last_name}}</h2>
   <ul>
     {% for list in lists %}
-    <li>{{list.name}}</li>
+      {% match list.id %}
+        {% when Some with (list_id) %}
+        <li><a href="/lists/{{list_id}}">{{list.name}}</a></li>
+        {% when None %}
+      {% endmatch %}
     {% endfor %}
   </ul>
   {% endfor %}
