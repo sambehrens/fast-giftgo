@@ -6,6 +6,7 @@ use chrono::Utc;
 use mongodb::{bson::doc, options::ClientOptions, Client, Collection};
 use serde::{Deserialize, Serialize};
 use tokio_stream::StreamExt;
+use warp::http::header::{HeaderMap, HeaderValue};
 use warp::{reject::Rejection, reply::Reply, Filter};
 
 mod secrets;
@@ -15,7 +16,7 @@ mod secrets;
 
 #[tokio::main]
 async fn main() -> mongodb::error::Result<()> {
-    let client_options = ClientOptions::parse(secrets::mongo_url).await?;
+    let client_options = ClientOptions::parse(secrets::MONGO_URL).await?;
     let client = Client::with_options(client_options)?;
     let database = client.database("test");
     let users = database.collection::<User>("users");
@@ -25,12 +26,20 @@ async fn main() -> mongodb::error::Result<()> {
 
     database.run_command(doc! {"ping": 1}, None).await?;
     println!("Pinged your deployment. You successfully connected to MongoDB!");
+    
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        "Cache-Control",
+        HeaderValue::from_static("private, max-age=3"),
+    );
+
 
     let lists_page_route = warp::path!("lists")
         .and(with_lists(lists.clone()))
         .and(with_friendships(friendships.clone()))
         .and(with_users(users.clone()))
-        .and_then(lists_handler);
+        .and_then(lists_handler)
+        .with(warp::reply::with::headers(headers.clone()));
 
     let list_route = warp::path!("lists" / String)
         .and(with_lists(lists.clone()))
@@ -38,7 +47,8 @@ async fn main() -> mongodb::error::Result<()> {
         .and(with_friendships(friendships.clone()))
         .and(with_list_items(list_items.clone()))
         .and(warp::header::optional::<String>("HX-Request"))
-        .and_then(single_list_handler);
+        .and_then(single_list_handler)
+        .with(warp::reply::with::headers(headers));
 
     warp::serve(list_route.or(lists_page_route))
         .run(([0, 0, 0, 0, 0, 0, 0, 0], 3030))

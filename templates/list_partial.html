@@ -1,13 +1,31 @@
-<div class="flex flex-col">
-  <code><a href="/lists">[X] Close</a></code>
+<div class="flex flex-col bg-primary shadow-1 p-l">
+  <code><a href="/lists" preload>[X] Close</a></code>
   <h1>{{list.name}}</h1>
   <ul>
   {% for item in list_items %}
+    {% match item.id %}
+      {% when Some with (item_id) %}
+      {% when None %}
+    {% endmatch %}
     {% match item.link %}
       {% when Some with (link) %}
-      <li><a href="{{link}}" rel="noopener noreferrer" target="_blank">{{item.name}}</a></li>
+      <li>
+        <a
+          href="{{link}}"
+          rel="noopener noreferrer"
+          target="_blank"
+          class="py-s"
+          >{{item.name}}
+        </a>
+        <!-- <button -->
+        <!--   hx-post="/list-item/{{item.id}}/claim" -->
+        <!--   hx-swap="outerHTML" -->
+        <!--   > -->
+        <!--   Claim -->
+        <!-- </button> -->
+      </li>
       {% when None %}
-      <li>{{item.name}}</li>
+      <li><p class="py-s">{{item.name}}</p></li>
     {% endmatch %}
   {% endfor %}
   </ul>

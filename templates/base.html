@@ -3,36 +3,42 @@
   <head>
     <title>{% block title %}{{ title }}{% endblock %}</title>
     <script src="https://unpkg.com/htmx.org@1.9.11"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.11/dist/ext/preload.js"></script>
 <style>
-/* start css reset */
-*, *::before, *::after {
-  box-sizing: border-box;
+{% include "css-reset.css" %}
+{% include "utilities.css" %}
+html, body, #content {
+  height: 100%;
 }
-* {
-  margin: 0;
-  line-height: calc(1em + 0.5rem);
+ul {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+  padding: 0;
 }
-body {
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol";
-}
-img, picture, video, canvas, svg {
+.menu-btn {
   display: block;
-  max-width: 100%;
+  background: none;
+  border: none;
+  border-radius: 0.25rem;
+  text-align: start;
+  padding: 0.75rem 1rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+    width: 100%;
+    
+  &:hover {
+    background-color: #eee;
+  }
+  
+  &.selected {
+    background-color: #eee;
+  }
 }
-input, button, textarea, select {
-  font: inherit;
-}
-p, h1, h2, h3, h4, h5, h6 {
-  overflow-wrap: break-word;
-}
-/* end css reset */
-.flex { display: flex; }
-.flex-col { flex-direction: column; }
 </style>
   </head>
-  <body>
+  <body hx-ext="preload">
     <div id="content">
       {% block content %}{% endblock %}
     </div>
